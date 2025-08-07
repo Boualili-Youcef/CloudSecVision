@@ -1,0 +1,16 @@
+[
+  {
+    "GroupId": "sg-0ac5a858b5de77db4",
+    "GroupName": "test-sg",
+    "Port": 22,
+    "IpRange": "0.0.0.0/0",
+    "Issue": "SSH port 22 open to the world"
+  },
+  {
+    "GroupId": "sg-0ac5a858b5de77db4",
+    "GroupName": "test-sg",
+    "Port": 22,
+    "IpRange": "::/0",
+    "Issue": "SSH port 22 open to the world (IPv6)"
+  }
+]
