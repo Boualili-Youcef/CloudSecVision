@@ -48,5 +48,7 @@ def scan_iam_permissions():
 
     print(f"✅ IAM report generated at {output_path} ({len(results)} issues found)")
 
+    return results
+
 if __name__ == "__main__":
     scan_iam_permissions()

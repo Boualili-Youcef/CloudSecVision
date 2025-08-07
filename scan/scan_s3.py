@@ -47,6 +47,9 @@ def main():
         json.dump(results, f, indent=2)
     
     print(f"✅ S3 report generated at {output_path} ({len(results)} issues found)")
+    
+    return results
+
 
 if __name__ == "__main__":
     main()

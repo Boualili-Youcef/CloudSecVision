@@ -42,6 +42,8 @@ def scan_ec2_security_groups():
         json.dump(results, f, indent=2)
 
     print(f"✅ EC2 report generated at scan/results/ec2_scan.json ({len(results)} issues found)")
+    
+    return results
 
 if __name__ == "__main__":
     scan_ec2_security_groups()

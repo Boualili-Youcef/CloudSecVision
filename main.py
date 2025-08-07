@@ -7,6 +7,7 @@ from scan.scan_s3 import main as scan_s3
 def main():
     parser = argparse.ArgumentParser(description='CloudSecVision - AWS Security Scanner')
     parser.add_argument('--service', choices=['ec2', 'iam', 's3', 'all'], default='all')
+    parser.add_argument('--ai', action='store_true', help='Enable AI analysis')
     
     args = parser.parse_args()
 
@@ -28,6 +29,17 @@ def main():
         print("🔍 Scanning S3 Buckets...")
         results['s3'] = scan_s3()
         print()
+        
+    if args.ai:
+        try:
+            from analysis.ai_analyzer import analyze_security_issues, display_ai_analysis
+            analysis = analyze_security_issues(results)
+            display_ai_analysis(analysis)
+        except Exception as e:
+            print(f"❌ AI analysis failed: {e}")
+            print("💡 Make sure Ollama is running: ollama serve")
+    
+    print("✅ Scan completed!")
         
 if __name__ == "__main__":
     main()
