@@ -1,0 +1,6 @@
+[
+  {
+    "BucketName": "youcef-s3-test-bucket-01",
+    "Issue": "Bucket is publicly accessible"
+  }
+]
