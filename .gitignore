@@ -1,3 +1,9 @@
 aws
 __pycache__/
 venv/
+scan/results/*.json
+!scan/results/examples/
+reports/*.json
+reports/*.html
+*arn:aws:*
+*-[0-9]{12}-*
