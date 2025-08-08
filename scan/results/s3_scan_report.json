@@ -1,6 +1,67 @@
 [
   {
+    "BucketName": "youcef-s3-private-bucket-01",
+    "Issue": "Bucket versioning is Disabled",
+    "Severity": "MEDIUM",
+    "Recommendation": "Enable versioning for data protection"
+  },
+  {
+    "BucketName": "youcef-s3-private-bucket-01",
+    "Issue": "MFA Delete not enabled",
+    "Severity": "MEDIUM",
+    "Recommendation": "Enable MFA Delete for additional protection"
+  },
+  {
+    "BucketName": "youcef-s3-private-bucket-01",
+    "Issue": "Access logging not configured",
+    "Severity": "LOW",
+    "Recommendation": "Enable S3 access logging for audit trails"
+  },
+  {
+    "BucketName": "youcef-s3-private-bucket-01",
+    "Issue": "No lifecycle policy configured",
+    "Severity": "LOW",
+    "Recommendation": "Configure lifecycle rules for cost optimization"
+  },
+  {
     "BucketName": "youcef-s3-test-bucket-01",
-    "Issue": "Bucket is publicly accessible"
+    "Issue": "Block Public Access not fully configured",
+    "Severity": "HIGH",
+    "Details": {
+      "BlockPublicAcls": false,
+      "IgnorePublicAcls": false,
+      "BlockPublicPolicy": false,
+      "RestrictPublicBuckets": false
+    }
+  },
+  {
+    "BucketName": "youcef-s3-test-bucket-01",
+    "Issue": "Bucket ACL grants READ to AllUsers",
+    "Severity": "CRITICAL",
+    "Permission": "READ"
+  },
+  {
+    "BucketName": "youcef-s3-test-bucket-01",
+    "Issue": "Bucket versioning is Disabled",
+    "Severity": "MEDIUM",
+    "Recommendation": "Enable versioning for data protection"
+  },
+  {
+    "BucketName": "youcef-s3-test-bucket-01",
+    "Issue": "MFA Delete not enabled",
+    "Severity": "MEDIUM",
+    "Recommendation": "Enable MFA Delete for additional protection"
+  },
+  {
+    "BucketName": "youcef-s3-test-bucket-01",
+    "Issue": "Access logging not configured",
+    "Severity": "LOW",
+    "Recommendation": "Enable S3 access logging for audit trails"
+  },
+  {
+    "BucketName": "youcef-s3-test-bucket-01",
+    "Issue": "No lifecycle policy configured",
+    "Severity": "LOW",
+    "Recommendation": "Configure lifecycle rules for cost optimization"
   }
 ]
