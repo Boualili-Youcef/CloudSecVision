@@ -9,7 +9,7 @@ import boto3
 from scan.scan_ec2 import scan_ec2_security_groups
 from scan.scan_iam import scan_iam_permissions
 from scan.scan_s3 import main as scan_s3
-from analysis.ai_analyzer import analyze_security_issues, generate_iam_report
+from analysis.ai_analyzer import analyze_security_issues, generate_iam_report, generate_ec2_report, generate_s3_report, display_iam_report, display_ec2_report, display_s3_report
 
 # Page configuration
 st.set_page_config(
@@ -376,6 +376,252 @@ def display_iam_page():
         else:
             st.error(f"❌ Status: {compliance}")
 
+def display_s3_page():
+    """Display dedicated S3 security analysis page"""
+    st.markdown('<div class="main-header"><h1>☁️ S3 Security Analysis</h1></div>', unsafe_allow_html=True)
+    
+    # Load S3 results
+    results = load_scan_results()
+    s3_results = results.get('s3', [])
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col2:
+        st.subheader("🎛️ Controls")
+        if st.button("🔄 Refresh S3 Scan", type="primary"):
+            with st.spinner("Scanning S3 buckets..."):
+                try:
+                    s3_results = scan_s3()
+                    st.success("✅ S3 scan completed!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Scan failed: {str(e)}")
+        
+        if st.button("🤖 Generate AI Report"):
+            if s3_results:
+                with st.spinner("Generating AI analysis..."):
+                    ai_report = generate_s3_report(s3_results)
+                    st.session_state['s3_ai_report'] = ai_report
+                    st.success("✅ AI report generated!")
+            else:
+                st.warning("No S3 issues found to analyze.")
+    
+    with col1:
+        st.subheader("📊 S3 Security Overview")
+        
+        if not s3_results:
+            st.success("✅ No S3 security issues detected!")
+            st.info("Your S3 buckets appear to follow security best practices.")
+        else:
+            # Display metrics
+            total_issues = len(s3_results)
+            critical_issues = len([i for i in s3_results if i.get('Severity') == 'CRITICAL'])
+            high_issues = len([i for i in s3_results if i.get('Severity') == 'HIGH'])
+            
+            col1_1, col1_2, col1_3 = st.columns(3)
+            with col1_1:
+                st.metric("🚨 Total Issues", total_issues)
+            with col1_2:
+                st.metric("⚠️ Critical", critical_issues, delta="Needs Attention" if critical_issues > 0 else None)
+            with col1_3:
+                st.metric("🟠 High", high_issues)
+            
+            # Group by bucket
+            buckets = {}
+            for issue in s3_results:
+                bucket = issue.get('BucketName', 'Unknown')
+                if bucket not in buckets:
+                    buckets[bucket] = []
+                buckets[bucket].append(issue)
+            
+            # Display buckets with issues
+            st.subheader("🪣 Affected Buckets")
+            
+            for bucket_name, issues in buckets.items():
+                with st.expander(f"Bucket: {bucket_name} ({len(issues)} issues)"):
+                    # Group by severity
+                    by_severity = {
+                        'CRITICAL': [i for i in issues if i.get('Severity') == 'CRITICAL'],
+                        'HIGH': [i for i in issues if i.get('Severity') == 'HIGH'],
+                        'MEDIUM': [i for i in issues if i.get('Severity') == 'MEDIUM'],
+                        'LOW': [i for i in issues if i.get('Severity') == 'LOW']
+                    }
+                    
+                    for severity, sev_issues in by_severity.items():
+                        if sev_issues:
+                            if severity == 'CRITICAL':
+                                st.error(f"🚨 {severity}: {len(sev_issues)} issues")
+                            elif severity == 'HIGH':
+                                st.warning(f"⚠️ {severity}: {len(sev_issues)} issues")
+                            elif severity == 'MEDIUM':
+                                st.info(f"ℹ️ {severity}: {len(sev_issues)} issues")
+                            else:
+                                st.success(f"✓ {severity}: {len(sev_issues)} issues")
+                            
+                            for i, issue in enumerate(sev_issues, 1):
+                                st.write(f"**Issue #{i}:** {issue.get('Issue', 'Unknown issue')}")
+                                if 'Recommendation' in issue:
+                                    st.write(f"*Recommendation:* {issue['Recommendation']}")
+    
+    # AI Analysis Report
+    if 's3_ai_report' in st.session_state:
+        st.markdown("---")
+        st.subheader("🤖 AI Security Analysis Report")
+        
+        report = st.session_state['s3_ai_report']
+        
+        # Risk Assessment
+        risk_level = report.get('risk_assessment', 'UNKNOWN')
+        if risk_level == 'CRITICAL':
+            st.error(f"🚨 Risk Level: {risk_level}")
+        elif risk_level == 'HIGH':
+            st.warning(f"⚠️ Risk Level: {risk_level}")
+        elif risk_level == 'MEDIUM':
+            st.info(f"ℹ️ Risk Level: {risk_level}")
+        else:
+            st.success(f"✅ Risk Level: {risk_level}")
+        
+        # Executive Summary
+        st.subheader("📋 Executive Summary")
+        st.write(report.get('summary', 'No summary available'))
+        
+        # Detailed Analysis
+        st.subheader("🔬 Detailed Analysis")
+        st.write(report.get('detailed_analysis', 'No detailed analysis available'))
+        
+        # Recommendations and Actions
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("💡 Recommendations")
+            recommendations = report.get('recommendations', [])
+            for rec in recommendations:
+                st.write(f"• {rec}")
+        
+        with col2:
+            st.subheader("🚨 Priority Actions")
+            actions = report.get('priority_actions', [])
+            for action in actions:
+                st.write(f"• {action}")
+        
+        # Compliance Status
+        st.subheader("📜 Compliance Status")
+        compliance = report.get('compliance_status', 'UNKNOWN')
+        if compliance == 'COMPLIANT':
+            st.success(f"✅ Status: {compliance}")
+        elif compliance == 'PARTIALLY_COMPLIANT':
+            st.warning(f"⚠️ Status: {compliance}")
+        else:
+            st.error(f"❌ Status: {compliance}")
+
+def display_ec2_page():
+    """Display dedicated EC2 security analysis page"""
+    st.markdown('<div class="main-header"><h1>🖥️ EC2 Security Analysis</h1></div>', unsafe_allow_html=True)
+    
+    # Load EC2 results
+    results = load_scan_results()
+    ec2_results = results.get('ec2', [])
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col2:
+        st.subheader("🎛️ Controls")
+        if st.button("🔄 Refresh EC2 Scan", type="primary"):
+            with st.spinner("Scanning EC2 security groups..."):
+                try:
+                    ec2_results = scan_ec2_security_groups()
+                    st.success("✅ EC2 scan completed!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Scan failed: {str(e)}")
+        
+        if st.button("🤖 Generate AI Report"):
+            if ec2_results:
+                with st.spinner("Generating AI analysis..."):
+                    ai_report = generate_ec2_report(ec2_results)
+                    st.session_state['ec2_ai_report'] = ai_report
+                    st.success("✅ AI report generated!")
+            else:
+                st.warning("No EC2 issues found to analyze.")
+    
+    with col1:
+        st.subheader("📊 EC2 Security Overview")
+        
+        if not ec2_results:
+            st.success("✅ No EC2 security issues detected!")
+            st.info("Your EC2 security groups appear to follow security best practices.")
+        else:
+            # Display metrics
+            total_issues = len(ec2_results)
+            ssh_open = sum(1 for issue in ec2_results if "SSH port 22 open" in issue.get('Issue', ''))
+            
+            col1_1, col1_2 = st.columns(2)
+            with col1_1:
+                st.metric("🚨 Security Issues", total_issues)
+            with col1_2:
+                st.metric("⚠️ SSH Exposed", ssh_open, delta=None if ssh_open == 0 else "Needs Attention")
+            
+            # Display detailed issues
+            st.subheader("🔍 Detailed Issues")
+            for i, issue in enumerate(ec2_results, 1):
+                with st.expander(f"Security Group #{i}: {issue.get('GroupName', 'Unknown')}"):
+                    st.write(f"**Group ID:** `{issue.get('GroupId', 'Unknown')}`")
+                    st.write(f"**Port:** {issue.get('Port', 'Unknown')}")
+                    st.write(f"**IP Range:** `{issue.get('IpRange', 'Unknown')}`")
+                    st.write(f"**Issue:** {issue.get('Issue', 'Unknown issue')}")
+                    st.warning("⚠️ This security group has potentially dangerous configurations.")
+    
+    # AI Analysis Report
+    if 'ec2_ai_report' in st.session_state:
+        st.markdown("---")
+        st.subheader("🤖 AI Security Analysis Report")
+        
+        report = st.session_state['ec2_ai_report']
+        
+        # Risk Assessment
+        risk_level = report.get('risk_assessment', 'UNKNOWN')
+        if risk_level == 'CRITICAL':
+            st.error(f"🚨 Risk Level: {risk_level}")
+        elif risk_level == 'HIGH':
+            st.warning(f"⚠️ Risk Level: {risk_level}")
+        elif risk_level == 'MEDIUM':
+            st.info(f"ℹ️ Risk Level: {risk_level}")
+        else:
+            st.success(f"✅ Risk Level: {risk_level}")
+        
+        # Executive Summary
+        st.subheader("📋 Executive Summary")
+        st.write(report.get('summary', 'No summary available'))
+        
+        # Detailed Analysis
+        st.subheader("🔬 Detailed Analysis")
+        st.write(report.get('detailed_analysis', 'No detailed analysis available'))
+        
+        # Recommendations and Actions
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("💡 Recommendations")
+            recommendations = report.get('recommendations', [])
+            for rec in recommendations:
+                st.write(f"• {rec}")
+        
+        with col2:
+            st.subheader("🚨 Priority Actions")
+            actions = report.get('priority_actions', [])
+            for action in actions:
+                st.write(f"• {action}")
+        
+        # Compliance Status
+        st.subheader("📜 Compliance Status")
+        compliance = report.get('compliance_status', 'UNKNOWN')
+        if compliance == 'COMPLIANT':
+            st.success(f"✅ Status: {compliance}")
+        elif compliance == 'PARTIALLY_COMPLIANT':
+            st.warning(f"⚠️ Status: {compliance}")
+        else:
+            st.error(f"❌ Status: {compliance}")
+
 def main():
     # Sidebar navigation
     st.sidebar.title("🛡️ CloudSecVision")
@@ -392,11 +638,9 @@ def main():
     elif page == "🔐 IAM Analysis":
         display_iam_page()
     elif page == "☁️ S3 Analysis":
-        st.markdown('<div class="main-header"><h1>☁️ S3 Security Analysis</h1></div>', unsafe_allow_html=True)
-        st.info("🚧 S3 detailed analysis page coming soon!")
+        display_s3_page()
     elif page == "🖥️ EC2 Analysis":
-        st.markdown('<div class="main-header"><h1>🖥️ EC2 Security Analysis</h1></div>', unsafe_allow_html=True)
-        st.info("🚧 EC2 detailed analysis page coming soon!")
+        display_ec2_page()
     
     # Sidebar info
     st.sidebar.markdown("---")
