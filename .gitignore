@@ -8,3 +8,4 @@ reports/*.html
 *arn:aws:*
 *-[0-9]{12}-*
 awscliv2.zip
+.streamlit/

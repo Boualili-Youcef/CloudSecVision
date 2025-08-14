@@ -135,7 +135,7 @@ class S3SecurityScanner:
         return issues
     
     def check_bucket_versioning(self, bucket_name):
-        """Vérifier la configuration du versioning"""
+        """Verify the bucket versioning configuration"""
         issues = []
         
         try:
