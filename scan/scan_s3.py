@@ -150,7 +150,7 @@ class S3SecurityScanner:
                     'Recommendation': 'Enable versioning for data protection'
                 })
             
-            # Vérifier MFA Delete
+            # Verify MFA Delete
             mfa_delete = versioning.get('MfaDelete', 'Disabled')
             if mfa_delete != 'Enabled':
                 issues.append({
@@ -191,7 +191,7 @@ class S3SecurityScanner:
         return issues
     
     def check_bucket_lifecycle(self, bucket_name):
-        """Vérifier les politiques de cycle de vie"""
+        """Verify the bucket lifecycle policies"""
         issues = []
         
         try:
@@ -208,21 +208,21 @@ class S3SecurityScanner:
         return issues
     
     def scan_bucket_comprehensive(self, bucket_name):
-        """Scan complet d'un bucket S3"""
+        """Comprehensive scan of an S3 bucket"""
         print(f"🔍 Scanning bucket: {bucket_name}")
         
         all_issues = []
-        
-        # Tous les checks de sécurité
+
+        # All security checks
         all_issues.extend(self.check_bucket_public_access(bucket_name))
         all_issues.extend(self.check_bucket_encryption(bucket_name))
         all_issues.extend(self.check_bucket_versioning(bucket_name))
         all_issues.extend(self.check_bucket_logging(bucket_name))
         all_issues.extend(self.check_bucket_lifecycle(bucket_name))
-        
-        # Statistiques du bucket
+
+        # Bucket statistics
         try:
-            # Compter les objets (échantillon)
+            # Count objects (sample)
             objects = self.s3.list_objects_v2(Bucket=bucket_name, MaxKeys=10)
             object_count = objects.get('KeyCount', 0)
             
@@ -230,8 +230,8 @@ class S3SecurityScanner:
                 print(f"   📁 Found {object_count}+ objects")
         except ClientError:
             pass
-        
-        # Afficher les résultats par sévérité
+
+        # Display results by severity
         critical = [i for i in all_issues if i.get('Severity') == 'CRITICAL']
         high = [i for i in all_issues if i.get('Severity') == 'HIGH']
         medium = [i for i in all_issues if i.get('Severity') == 'MEDIUM']
@@ -257,8 +257,8 @@ def main():
     print("=" * 50)
     
     scanner = S3SecurityScanner()
-    
-    # Lister tous les buckets
+
+    # List all buckets
     buckets = scanner.list_buckets()
     print(f"🌐 Found {len(buckets)} S3 buckets to analyze\n")
     
@@ -267,14 +267,14 @@ def main():
         return []
     
     all_results = []
-    
-    # Scanner chaque bucket
+
+    # Scan each bucket
     for bucket in buckets:
         bucket_issues = scanner.scan_bucket_comprehensive(bucket)
         all_results.extend(bucket_issues)
-        print()  # Ligne vide entre les buckets
-    
-    # Résumé global
+        print()  # Blank line between buckets
+
+    # Global summary
     print("=" * 50)
     print(f"📊 SCAN SUMMARY:")
     print(f"   🏢 Buckets scanned: {len(buckets)}")
@@ -291,8 +291,8 @@ def main():
         for severity, count in severity_counts.items():
             if count > 0:
                 print(f"   {severity}: {count} issues")
-    
-    # Sauvegarder les résultats
+
+    # Save results
     script_dir = os.path.dirname(os.path.abspath(__file__))
     results_dir = os.path.join(script_dir, "results")
     os.makedirs(results_dir, exist_ok=True)

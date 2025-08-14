@@ -5,12 +5,36 @@ echo "🛡️ CloudSecVision Dashboard"
 echo "=========================="
 echo ""
 
-# Virtual environment check
+# Check if we're in the project directory
+if [[ ! -f "dashboard.py" ]]; then
+    echo "❌ Error: dashboard.py not found. Please run this script from the project root directory."
+    exit 1
+fi
+
+# Virtual environment setup
+if [[ ! -d "venv" ]]; then
+    echo "⚠️  Virtual environment not found. Creating one..."
+    python3 -m venv venv
+    echo "✅ Virtual environment created"
+fi
+
+# Activate virtual environment
 if [[ "$VIRTUAL_ENV" != "" ]]; then
-    echo "✅ Virtual environment detected: $VIRTUAL_ENV"
+    echo "✅ Virtual environment already active: $VIRTUAL_ENV"
 else
-    echo "⚠️  No virtual environment detected"
-    echo "💡 Recommendation: activate your venv with 'source venv/bin/activate'"
+    echo "🔄 Activating virtual environment..."
+    source venv/bin/activate
+    echo "✅ Virtual environment activated"
+fi
+
+# Install dependencies if needed
+echo "� Checking dependencies..."
+if ! python -c "import streamlit" 2>/dev/null; then
+    echo "📦 Installing dependencies..."
+    pip install -r requirements.txt
+    echo "✅ Dependencies installed"
+else
+    echo "✅ Dependencies already installed"
 fi
 
 echo ""
@@ -20,5 +44,5 @@ echo ""
 echo "⌨️  Press Ctrl+C to stop the server"
 echo ""
 
-# Launch Streamlit
-streamlit run dashboard.py --server.port 8501 --server.headless true
+# Launch Streamlit with the virtual environment
+./venv/bin/streamlit run dashboard.py --server.port 8501 --server.headless true
