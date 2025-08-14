@@ -1,7 +1,0 @@
-[
-  {
-    "PolicyName": "TestTooPermissivePolicy",
-    "Arn": "arn:aws:iam::798344624177:policy/TestTooPermissivePolicy",
-    "Issue": "Too permissive (\"*\" in Action or Resource)"
-  }
-]
