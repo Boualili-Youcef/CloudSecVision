@@ -1,0 +1,29 @@
+aws:
+  label: AWS
+  permalink: /aws
+  description: Amazon Web Services related content
+
+security:
+  label: Security
+  permalink: /security
+  description: Cloud security and vulnerability management
+
+ai:
+  label: AI
+  permalink: /ai
+  description: Artificial Intelligence and machine learning
+
+announcement:
+  label: Announcement
+  permalink: /announcement
+  description: Product announcements and releases
+
+cloudsecvision:
+  label: CloudSecVision
+  permalink: /cloudsecvision
+  description: CloudSecVision tool specific content
+
+scanning:
+  label: Scanning
+  permalink: /scanning
+  description: Security scanning and analysis
