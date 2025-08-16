@@ -1,5 +1,10 @@
 # 🛡️ CloudSecVision - AWS Security Scanner with AI Analysis
 
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![AWS](https://img.shields.io/badge/AWS-Security-orange.svg)
+![AI](https://img.shields.io/badge/AI-Ollama-green.svg)
+
 Comprehensive security scanner for AWS infrastructure with AI-powered analysis using Ollama.
 
 ## 📋 Table of Contents

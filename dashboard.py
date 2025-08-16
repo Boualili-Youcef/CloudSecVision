@@ -13,7 +13,7 @@ from analysis.ai_analyzer import analyze_security_issues, generate_iam_report, g
 
 # Page configuration
 st.set_page_config(
-    page_title="🛡️ CloudSecVision Dashboard",
+    page_title="CloudSecVision Dashboard",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
