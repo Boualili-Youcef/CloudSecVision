@@ -28,7 +28,7 @@ else
 fi
 
 # Install dependencies if needed
-echo "� Checking dependencies..."
+echo "📦 Checking dependencies..."
 if ! python -c "import streamlit" 2>/dev/null; then
     echo "📦 Installing dependencies..."
     pip install -r requirements.txt
@@ -44,5 +44,10 @@ echo ""
 echo "⌨️  Press Ctrl+C to stop the server"
 echo ""
 
-# Launch Streamlit with the virtual environment
-./venv/bin/streamlit run dashboard.py --server.port 8501 --server.headless true
+# Launch Streamlit with options to hide network URLs
+./venv/bin/streamlit run dashboard.py \
+    --server.port 8501 \
+    --server.headless true \
+    --server.address localhost \
+    --logger.level error \
+    --client.showErrorDetails false

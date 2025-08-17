@@ -1,0 +1,56 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  cloudsecvision:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: cloudsecvision-app
+    ports:
+      - "8501:8501"
+    environment:
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - ~/.aws:/home/cloudsec/.aws:ro
+      - ./scan/results:/home/cloudsec/app/scan/results
+      - .:/home/cloudsec/app
+    networks:
+      - cloudsec-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: cloudsecvision-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - cloudsec-network
+    restart: unless-stopped
+
+  docs:
+    build:
+      context: ./website
+      dockerfile: Dockerfile
+    container_name: cloudsecvision-docs
+    ports:
+      - "3000:3000"
+    networks:
+      - cloudsec-network
+    restart: unless-stopped
+
+networks:
+  cloudsec-network:
+    driver: bridge
+
+volumes:
+  ollama_data:

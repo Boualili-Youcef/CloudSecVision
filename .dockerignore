@@ -1,0 +1,56 @@
+# .dockerignore
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Node modules (Docusaurus)
+node_modules/
+website/node_modules/
+website/.docusaurus/
+website/build/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Résultats de scan (contiennent des données sensibles)
+scan/results/*.json
+!scan/results/.gitkeep
+
+# AWS credentials
+.aws/
+aws/
+
+# Documentation locale
+website/
+
+# Cache
+.cache/
+.pytest_cache/
+
+# Temporary files
+tmp/
+temp/
