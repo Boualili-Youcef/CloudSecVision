@@ -331,44 +331,88 @@ def display_iam_report(analysis):
     
     print("="*60)
 
-def generate_ec2_report(ec2_results):
+def generate_ec2_report(ec2_data):
     """Generate a comprehensive EC2 security report using Ollama AI"""
     
     print("🤖 Generating EC2 security report with AI...")
     
-    if not ec2_results or len(ec2_results) == 0:
-        return {
-            "summary": "✅ No EC2 security issues detected. Your EC2 security groups appear to be properly configured.",
-            "risk_assessment": "LOW",
-            "detailed_analysis": "All scanned EC2 security groups are properly configured without any dangerous open ports or configurations.",
-            "recommendations": [
-                "Continue regular security group reviews",
-                "Consider implementing network ACLs as an additional layer of security",
-                "Maintain documentation of security group purposes and configurations"
-            ],
-            "priority_actions": [],
-            "compliance_status": "COMPLIANT"
-        }
+    # Handle both old format (list) and new format (dict)
+    if isinstance(ec2_data, dict):
+        # New structured format
+        findings = ec2_data.get('findings', [])
+        total_issues = len([f for f in findings if f.get('severity', '').upper() in ['CRITICAL', 'HIGH', 'MEDIUM']])
+        security_score = ec2_data.get('security_score', 0)
+        
+        print(f"📊 Processing structured EC2 data: {total_issues} issues, score: {security_score}")
+        
+        if total_issues == 0:
+            return {
+                "summary": f"✅ No critical EC2 security issues detected. Security Score: {security_score}/100",
+                "risk_assessment": "LOW",
+                "detailed_analysis": "All scanned EC2 resources are properly configured without any dangerous configurations.",
+                "recommendations": [
+                    "Continue regular security reviews",
+                    "Consider implementing additional monitoring",
+                    "Maintain documentation of security configurations"
+                ],
+                "priority_actions": [],
+                "compliance_status": "COMPLIANT"
+            }
+    else:
+        # Old format (list) - for backwards compatibility
+        findings = ec2_data if isinstance(ec2_data, list) else []
+        total_issues = len(findings)
+        security_score = 0  # No score in old format
+        
+        print(f"📊 Processing legacy EC2 data: {total_issues} issues")
+        
+        if total_issues == 0:
+            return {
+                "summary": "✅ No EC2 security issues detected. Your EC2 security groups appear to be properly configured.",
+                "risk_assessment": "LOW",
+                "detailed_analysis": "All scanned EC2 security groups are properly configured without any dangerous open ports or configurations.",
+                "recommendations": [
+                    "Continue regular security group reviews",
+                    "Consider implementing network ACLs as an additional layer of security",
+                    "Maintain documentation of security group purposes and configurations"
+                ],
+                "priority_actions": [],
+                "compliance_status": "COMPLIANT"
+            }
+
+    # Prepare data for AI analysis
+    analysis_data = {
+        "total_findings": total_issues,
+        "security_score": security_score,
+        "findings": findings[:20] if len(findings) > 20 else findings  # Limit to avoid token limits
+    }
 
     prompt = f"""
-Analyze these AWS EC2 security issues and provide a detailed security report in English.
+Analyze this AWS EC2 security assessment and provide a detailed security report in English.
 
-EC2 Issues Detected: {json.dumps(ec2_results, indent=2)}
+EC2 Security Assessment Data:
+- Total Security Issues: {total_issues}
+- Security Score: {security_score}/100
+- Critical Findings: {len([f for f in findings if f.get('severity', '').upper() == 'CRITICAL'])}
+- High Risk Findings: {len([f for f in findings if f.get('severity', '').upper() == 'HIGH'])}
+- Medium Risk Findings: {len([f for f in findings if f.get('severity', '').upper() == 'MEDIUM'])}
+
+Key Findings Details: {json.dumps(analysis_data, indent=2)}
 
 Respond with a STRUCTURED report that follows exactly this format:
 
 ## EXECUTIVE SUMMARY
-[A concise paragraph summarizing the current EC2 security posture]
+[A concise paragraph summarizing the current EC2 security posture based on the security score and findings]
 
 ## RISK LEVEL: [CRITICAL/HIGH/MEDIUM/LOW]
 
 ## DETAILED ANALYSIS
-[2-3 paragraphs explaining the technical issues in detail, their potential impact, and why they are problematic]
+[2-3 paragraphs explaining the technical issues in detail, their potential impact, and why they are problematic. Focus on the most severe findings.]
 
 ## RECOMMENDATIONS
-1. [Specific recommendation 1]
-2. [Specific recommendation 2]
-3. [Specific recommendation 3]
+1. [Specific recommendation 1 based on actual findings]
+2. [Specific recommendation 2 based on actual findings]
+3. [Specific recommendation 3 based on actual findings]
 
 ## PRIORITY ACTIONS
 1. [Immediate action 1 with recommended timeframe]
@@ -381,6 +425,7 @@ Important points to cover:
 - Describe specific attack vectors and risk scenarios
 - Indicate compliance implications (GDPR, SOC2, PCI-DSS, etc.)
 - Propose precise correction steps with example security group rules if relevant
+- Base risk level on security score: 0-30=CRITICAL, 31-50=HIGH, 51-70=MEDIUM, 71-100=LOW
 
 IMPORTANT: Present the report as structured and readable text, NOT in JSON format.
     """
@@ -407,7 +452,7 @@ IMPORTANT: Present the report as structured and readable text, NOT in JSON forma
                 # Convert text response to structured dictionary
                 analysis = {
                     "report": ai_text,  # Keep the full report
-                    "summary": "EC2 Security Analysis Report generated by AI",
+                    "summary": f"EC2 Security Analysis: {total_issues} issues found, Security Score: {security_score}/100",
                     "risk_assessment": "MEDIUM",  # Default value
                     "detailed_analysis": ai_text,
                     "recommendations": [],
@@ -466,9 +511,9 @@ IMPORTANT: Present the report as structured and readable text, NOT in JSON forma
 
     # Fallback analysis
     return {
-        "summary": f"⚠️ {len(ec2_results)} EC2 security issues detected requiring attention.",
-        "risk_assessment": "HIGH" if len(ec2_results) > 3 else "MEDIUM",
-        "detailed_analysis": "Multiple EC2 security groups have dangerous port configurations that may expose your instances to unauthorized access.",
+        "summary": f"⚠️ {total_issues} EC2 security issues detected requiring attention. Security Score: {security_score}/100",
+        "risk_assessment": "HIGH" if total_issues > 5 else "MEDIUM",
+        "detailed_analysis": "Multiple EC2 security configurations have been identified that may expose your infrastructure to security risks.",
         "recommendations": [
             "Restrict SSH access to specific IP ranges instead of 0.0.0.0/0",
             "Implement bastion hosts for secure remote access",
@@ -484,38 +529,149 @@ IMPORTANT: Present the report as structured and readable text, NOT in JSON forma
     }
 
 def display_ec2_report(analysis):
-    """Display the EC2 analysis report in a user-friendly format"""
-    
-    print("\n" + "="*60)
-    print("🤖 EC2 SECURITY ANALYSIS REPORT")
-    print("="*60)
-    
-    if analysis is None:
-        print("❌ No analysis data available")
-        return
-    
-    # Display full report if available
-    if "report" in analysis and analysis["report"]:
-        print(analysis["report"])
-    else:
-        # Fallback format
-        print(f"📊 Summary: {analysis.get('summary', 'Not available')}")
-        print(f"⚠️  Risk Level: {analysis.get('risk_assessment', 'UNKNOWN')}")
-        print(f"📜 Compliance Status: {analysis.get('compliance_status', 'UNKNOWN')}")
+    """Display the EC2 analysis report in Streamlit format"""
+    try:
+        import streamlit as st
         
-        recommendations = analysis.get('recommendations', [])
-        if recommendations:
-            print(f"\n💡 RECOMMENDATIONS:")
-            for i, rec in enumerate(recommendations, 1):
-                print(f"   {i}. {rec}")
+        if analysis is None:
+            st.error("❌ No analysis data available")
+            return
         
-        priority_actions = analysis.get('priority_actions', [])
-        if priority_actions:
-            print(f"\n🚨 PRIORITY ACTIONS:")
-            for i, action in enumerate(priority_actions, 1):
-                print(f"   {i}. {action}")
+        # Display full AI report if available
+        if "report" in analysis and analysis["report"]:
+            # Parse and display the structured AI report
+            report_text = analysis["report"]
+            
+            # Split by sections and display with proper Streamlit formatting
+            sections = report_text.split("##")
+            
+            for section in sections:
+                section = section.strip()
+                if not section:
+                    continue
+                    
+                lines = section.split('\n')
+                header = lines[0].strip()
+                content = '\n'.join(lines[1:]).strip()
+                
+                if "EXECUTIVE SUMMARY" in header:
+                    st.subheader("📋 Executive Summary")
+                    st.write(content)
+                    
+                elif "RISK LEVEL" in header:
+                    risk_level = content.strip()
+                    st.subheader("⚠️ Risk Assessment")
+                    if "CRITICAL" in risk_level:
+                        st.error(f"🚨 **{risk_level}**")
+                    elif "HIGH" in risk_level:
+                        st.warning(f"⚠️ **{risk_level}**")
+                    elif "MEDIUM" in risk_level:
+                        st.info(f"ℹ️ **{risk_level}**")
+                    else:
+                        st.success(f"✅ **{risk_level}**")
+                        
+                elif "DETAILED ANALYSIS" in header:
+                    st.subheader("🔬 Detailed Analysis")
+                    st.write(content)
+                    
+                elif "RECOMMENDATIONS" in header:
+                    st.subheader("💡 Recommendations")
+                    # Parse numbered recommendations
+                    rec_lines = [line.strip() for line in content.split('\n') if line.strip()]
+                    for line in rec_lines:
+                        if line.startswith(('1.', '2.', '3.', '4.', '5.')):
+                            st.write(f"• {line[2:].strip()}")
+                        elif line and not line.startswith('#'):
+                            st.write(f"• {line}")
+                            
+                elif "PRIORITY ACTIONS" in header:
+                    st.subheader("🎯 Priority Actions")
+                    # Parse numbered actions
+                    action_lines = [line.strip() for line in content.split('\n') if line.strip()]
+                    for line in action_lines:
+                        if line.startswith(('1.', '2.', '3.', '4.', '5.')):
+                            st.warning(f"🚨 {line[2:].strip()}")
+                        elif line and not line.startswith('#'):
+                            st.warning(f"🚨 {line}")
+                            
+                elif "COMPLIANCE STATUS" in header:
+                    st.subheader("📜 Compliance Status")
+                    status = content.strip()
+                    if "NON-COMPLIANT" in status:
+                        st.error(f"❌ **{status}**")
+                    elif "PARTIALLY" in status:
+                        st.warning(f"⚠️ **{status}**")
+                    else:
+                        st.success(f"✅ **{status}**")
+        else:
+            # Fallback format for structured data
+            st.subheader("📊 Analysis Summary")
+            st.write(analysis.get('summary', 'No summary available'))
+            
+            risk_level = analysis.get('risk_assessment', 'UNKNOWN')
+            st.subheader("⚠️ Risk Level")
+            if risk_level == 'CRITICAL':
+                st.error(f"🚨 **{risk_level}**")
+            elif risk_level == 'HIGH':
+                st.warning(f"⚠️ **{risk_level}**")
+            elif risk_level == 'MEDIUM':
+                st.info(f"ℹ️ **{risk_level}**")
+            else:
+                st.success(f"✅ **{risk_level}**")
+            
+            recommendations = analysis.get('recommendations', [])
+            if recommendations:
+                st.subheader("💡 Recommendations")
+                for rec in recommendations:
+                    st.write(f"• {rec}")
+            
+            priority_actions = analysis.get('priority_actions', [])
+            if priority_actions:
+                st.subheader("🎯 Priority Actions")
+                for action in priority_actions:
+                    st.warning(f"🚨 {action}")
+                    
+            compliance = analysis.get('compliance_status', 'UNKNOWN')
+            st.subheader("📜 Compliance Status")
+            if compliance == 'COMPLIANT':
+                st.success(f"✅ **{compliance}**")
+            elif compliance == 'PARTIALLY_COMPLIANT':
+                st.warning(f"⚠️ **{compliance}**")
+            else:
+                st.error(f"❌ **{compliance}**")
     
-    print("="*60)
+    except ImportError:
+        # Fallback to print if Streamlit not available
+        print("\n" + "="*60)
+        print("🤖 EC2 SECURITY ANALYSIS REPORT")
+        print("="*60)
+        
+        if analysis is None:
+            print("❌ No analysis data available")
+            return
+        
+        # Display full report if available
+        if "report" in analysis and analysis["report"]:
+            print(analysis["report"])
+        else:
+            # Fallback format
+            print(f"📊 Summary: {analysis.get('summary', 'Not available')}")
+            print(f"⚠️  Risk Level: {analysis.get('risk_assessment', 'UNKNOWN')}")
+            print(f"📜 Compliance Status: {analysis.get('compliance_status', 'UNKNOWN')}")
+            
+            recommendations = analysis.get('recommendations', [])
+            if recommendations:
+                print(f"\n💡 RECOMMENDATIONS:")
+                for i, rec in enumerate(recommendations, 1):
+                    print(f"   {i}. {rec}")
+            
+            priority_actions = analysis.get('priority_actions', [])
+            if priority_actions:
+                print(f"\n🚨 PRIORITY ACTIONS:")
+                for i, action in enumerate(priority_actions, 1):
+                    print(f"   {i}. {action}")
+        
+        print("="*60)
 
 def generate_s3_report(s3_results):
     """Generate a comprehensive S3 security report using Ollama AI"""

@@ -147,15 +147,26 @@ def display_overview():
     high_issues = 0
     services_scanned = len(results)
     
-    for service, issues in results.items():
-        if isinstance(issues, list):
-            total_issues += len(issues)
-            for issue in issues:
+    for service, data in results.items():
+        if isinstance(data, list):
+            # Format ancien (S3, IAM) - liste d'issues
+            total_issues += len(data)
+            for issue in data:
                 severity = issue.get('Severity', '').upper()
                 if severity == 'CRITICAL':
                     critical_issues += 1
                 elif severity == 'HIGH':
                     high_issues += 1
+        elif isinstance(data, dict):
+            # Format nouveau (EC2) - dictionnaire structuré
+            if 'findings' in data:
+                findings = data.get('findings', [])
+                total_issues += len(findings)
+                critical_issues += data.get('critical_issues', 0)
+                high_issues += data.get('high_issues', 0)
+            else:
+                # Fallback pour dictionnaire simple
+                total_issues += len(data)
     
     # Display metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -172,16 +183,33 @@ def display_overview():
     with col4:
         st.metric("📈 High Priority", high_issues)
     
-    # Security Score
+    # Security Score - utiliser le score professionnel d'EC2 comme base
     if total_issues == 0:
         security_score = 100
         score_color = "green"
-    elif critical_issues > 0:
-        security_score = max(0, 100 - (critical_issues * 25 + high_issues * 10))
-        score_color = "red"
     else:
-        security_score = max(20, 100 - (high_issues * 15 + (total_issues - high_issues) * 5))
-        score_color = "orange" if security_score < 70 else "green"
+        # Utiliser le score EC2 s'il existe, sinon calculer
+        if 'ec2' in results and isinstance(results['ec2'], dict) and 'security_score' in results['ec2']:
+            # Utiliser le score professionnel d'EC2 comme base
+            ec2_score = results['ec2']['security_score']
+            ec2_issues = len(results['ec2'].get('findings', []))
+            # Ajuster selon les autres services
+            other_issues = total_issues - ec2_issues
+            security_score = max(0, ec2_score - (other_issues * 5))
+        else:
+            # Calcul fallback pour format ancien
+            if critical_issues > 0:
+                security_score = max(0, 100 - (critical_issues * 25 + high_issues * 10))
+            else:
+                security_score = max(20, 100 - (high_issues * 15 + (total_issues - high_issues) * 5))
+        
+        # Couleur selon le score
+        if security_score < 30:
+            score_color = "red"
+        elif security_score < 70:
+            score_color = "orange"
+        else:
+            score_color = "green"
     
     st.markdown("---")
     col1, col2 = st.columns([1, 2])
@@ -214,12 +242,25 @@ def display_overview():
     with col2:
         # Issues by service chart
         service_data = []
-        for service, issues in results.items():
-            if isinstance(issues, list):
+        for service, data in results.items():
+            if isinstance(data, list):
+                # Format ancien (S3, IAM)
                 service_data.append({
                     'Service': service.upper(),
-                    'Issues': len(issues)
+                    'Issues': len(data)
                 })
+            elif isinstance(data, dict):
+                # Format nouveau (EC2)
+                if 'findings' in data:
+                    service_data.append({
+                        'Service': service.upper(),
+                        'Issues': len(data.get('findings', []))
+                    })
+                else:
+                    service_data.append({
+                        'Service': service.upper(),
+                        'Issues': len(data)
+                    })
         
         if service_data:
             df = pd.DataFrame(service_data)
@@ -235,11 +276,25 @@ def display_overview():
     st.subheader("📋 Recent Security Findings")
     
     all_issues = []
-    for service, issues in results.items():
-        if isinstance(issues, list):
-            for issue in issues:
+    for service, data in results.items():
+        if isinstance(data, list):
+            # Format ancien (S3, IAM)
+            for issue in data:
                 issue['Service'] = service.upper()
                 all_issues.append(issue)
+        elif isinstance(data, dict):
+            # Format nouveau (EC2)
+            if 'findings' in data:
+                for finding in data.get('findings', []):
+                    # Convertir le format EC2 vers le format unifié pour affichage
+                    issue = {
+                        'Service': service.upper(),
+                        'Severity': finding.get('severity', 'UNKNOWN').upper(),
+                        'Issue': finding.get('title', 'Unknown Issue'),
+                        'Description': finding.get('description', ''),
+                        'Resource': finding.get('resource_id', 'Unknown')
+                    }
+                    all_issues.append(issue)
     
     # Sort by severity
     severity_order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3}
@@ -551,23 +606,67 @@ def display_ec2_page():
             st.success("✅ No EC2 security issues detected!")
             st.info("Your EC2 security groups appear to follow security best practices.")
         else:
-            # Display metrics
-            total_issues = len(ec2_results)
-            ssh_open = sum(1 for issue in ec2_results if "SSH port 22 open" in issue.get('Issue', ''))
-            
-            col1_1, col1_2 = st.columns(2)
-            with col1_1:
-                st.metric("🚨 Security Issues", total_issues)
-            with col1_2:
-                st.metric("⚠️ SSH Exposed", ssh_open, delta=None if ssh_open == 0 else "Needs Attention")
-            
-            # Display detailed issues
-            st.subheader("🔍 Detailed Issues")
-            for i, issue in enumerate(ec2_results, 1):
-                with st.expander(f"Security Group #{i}: {issue.get('GroupName', 'Unknown')}"):
-                    st.write(f"**Group ID:** `{issue.get('GroupId', 'Unknown')}`")
-                    st.write(f"**Port:** {issue.get('Port', 'Unknown')}")
-                    st.write(f"**IP Range:** `{issue.get('IpRange', 'Unknown')}`")
+            # Handle both old format (list) and new format (dict with findings)
+            if isinstance(ec2_results, dict):
+                # New structured format
+                findings = ec2_results.get('findings', [])
+                total_issues = ec2_results.get('total_issues', len(findings))
+                security_score = ec2_results.get('security_score', 0)
+                critical_issues = ec2_results.get('critical_issues', 0)
+                high_issues = ec2_results.get('high_issues', 0)
+                
+                # Display enhanced metrics
+                col1_1, col1_2, col1_3 = st.columns(3)
+                with col1_1:
+                    st.metric("🚨 Total Issues", total_issues)
+                with col1_2:
+                    st.metric("🔥 Critical + High", critical_issues + high_issues, 
+                             delta=None if (critical_issues + high_issues) == 0 else "High Priority")
+                with col1_3:
+                    st.metric("📊 Security Score", f"{security_score}/100", 
+                             delta=f"{'Good' if security_score >= 70 else 'Needs Improvement'}")
+                
+                # Display detailed findings
+                if findings:
+                    st.subheader("🔍 Security Findings")
+                    for i, finding in enumerate(findings, 1):
+                        severity = finding.get('severity', 'UNKNOWN')
+                        title = finding.get('title', 'Unknown Issue')
+                        
+                        # Color code by severity
+                        severity_color = {
+                            'CRITICAL': '🔴',
+                            'HIGH': '🟠', 
+                            'MEDIUM': '🟡',
+                            'LOW': '🟢'
+                        }.get(severity, '⚪')
+                        
+                        with st.expander(f"{severity_color} [{severity}] {title}"):
+                            st.write(f"**Resource:** `{finding.get('resource_id', 'Unknown')}`")
+                            st.write(f"**Type:** {finding.get('resource_type', 'Unknown')}")
+                            st.write(f"**Category:** {finding.get('category', 'Unknown')}")
+                            st.write(f"**Description:** {finding.get('description', 'No description available')}")
+                            st.write(f"**Recommendation:** {finding.get('recommendation', 'No recommendation available')}")
+                            if finding.get('compliance_impact'):
+                                st.warning(f"**Compliance Impact:** {finding.get('compliance_impact')}")
+            else:
+                # Old format (list) - for backwards compatibility
+                total_issues = len(ec2_results)
+                ssh_open = sum(1 for issue in ec2_results if "SSH port 22 open" in str(issue.get('Issue', '')))
+                
+                col1_1, col1_2 = st.columns(2)
+                with col1_1:
+                    st.metric("🚨 Security Issues", total_issues)
+                with col1_2:
+                    st.metric("⚠️ SSH Exposed", ssh_open, delta=None if ssh_open == 0 else "Needs Attention")
+                
+                # Display detailed issues
+                st.subheader("🔍 Detailed Issues")
+                for i, issue in enumerate(ec2_results, 1):
+                    with st.expander(f"Security Group #{i}: {issue.get('GroupName', 'Unknown')}"):
+                        st.write(f"**Group ID:** `{issue.get('GroupId', 'Unknown')}`")
+                        st.write(f"**Port:** {issue.get('Port', 'Unknown')}")
+                        st.write(f"**IP Range:** `{issue.get('IpRange', 'Unknown')}`")
                     st.write(f"**Issue:** {issue.get('Issue', 'Unknown issue')}")
                     st.warning("⚠️ This security group has potentially dangerous configurations.")
     
