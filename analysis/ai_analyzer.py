@@ -8,7 +8,20 @@ def generate_iam_report(iam_results):
     
     print("🤖 Generating IAM security report with AI...")
     
-    if not iam_results or len(iam_results) == 0:
+    # Handle both old format (list) and new format (dict)
+    if isinstance(iam_results, dict):
+        findings = iam_results.get('findings', [])
+        total_issues = iam_results.get('total_issues', 0)
+        security_score = iam_results.get('security_score', 100)
+        risk_level = iam_results.get('risk_level', 'LOW')
+    else:
+        # Old format (list)
+        findings = iam_results if iam_results else []
+        total_issues = len(findings)
+        security_score = max(0, 100 - (total_issues * 10))
+        risk_level = 'HIGH' if total_issues > 5 else 'MEDIUM' if total_issues > 0 else 'LOW'
+    
+    if total_issues == 0:
         return {
             "summary": "✅ No IAM security issues detected. Your IAM policies appear to follow the principle of least privilege.",
             "risk_assessment": "LOW",
@@ -22,31 +35,56 @@ def generate_iam_report(iam_results):
             "compliance_status": "COMPLIANT"
         }
 
-    prompt = f"""
-Analyze these AWS IAM security issues and provide a detailed security report in English.
+    # Prepare data for AI analysis
+    analysis_data = {
+        "total_findings": total_issues,
+        "security_score": security_score,
+        "risk_level": risk_level,
+        "findings": findings[:20] if len(findings) > 20 else findings  # Limit for AI processing
+    }
 
-IAM Issues Detected: {json.dumps(iam_results, indent=2)}
+    prompt = f"""
+Analyze this AWS IAM security assessment and provide a detailed security report in English.
+
+IAM Security Assessment Data:
+- Total Security Issues: {total_issues}
+- Security Score: {security_score}/100
+- Risk Level: {risk_level}
+- Critical Findings: {len([f for f in findings if f.get('severity', '').upper() == 'CRITICAL'])}
+- High Risk Findings: {len([f for f in findings if f.get('severity', '').upper() == 'HIGH'])}
+- Medium Risk Findings: {len([f for f in findings if f.get('severity', '').upper() == 'MEDIUM'])}
+
+Key Findings Details: {json.dumps(analysis_data, indent=2)}
 
 Respond with a STRUCTURED report that follows exactly this format:
 
 ## EXECUTIVE SUMMARY
-[A concise paragraph summarizing the current IAM security posture]
+[A concise paragraph summarizing the current IAM security posture based on the security score and findings]
 
 ## RISK LEVEL: [CRITICAL/HIGH/MEDIUM/LOW]
 
 ## DETAILED ANALYSIS
-[2-3 paragraphs explaining the technical issues in detail, their potential impact, and why they are problematic]
+[2-3 paragraphs explaining the technical issues in detail, their potential impact, and why they are problematic. Focus on the most severe findings.]
 
 ## RECOMMENDATIONS
-1. [Specific recommendation 1]
-2. [Specific recommendation 2]
-3. [Specific recommendation 3]
+1. [Specific recommendation 1 based on actual findings]
+2. [Specific recommendation 2 based on actual findings]
+3. [Specific recommendation 3 based on actual findings]
 
 ## PRIORITY ACTIONS
 1. [Immediate action 1 with recommended timeframe]
 2. [Immediate action 2 with recommended timeframe]
 
 ## COMPLIANCE STATUS: [NON-COMPLIANT/PARTIALLY COMPLIANT/COMPLIANT]
+
+Important points to cover:
+- Explain the concrete impact of overly permissive policies and dangerous actions
+- Describe specific attack vectors and privilege escalation risks
+- Indicate compliance implications (CIS AWS Benchmark, SOC 2, etc.)
+- Propose precise correction steps with IAM policy examples if relevant
+- Base risk level on security score: 0-30=CRITICAL, 31-50=HIGH, 51-70=MEDIUM, 71-100=LOW
+
+IMPORTANT: Present the report as structured and readable text, NOT in JSON format.
 
 Important points to cover:
 - Explain the concrete impact of overly permissive policies
@@ -138,21 +176,24 @@ IMPORTANT: Present the report as structured and readable text, NOT in JSON forma
 
     # Fallback analysis
     return {
-        "summary": f"⚠️ {len(iam_results)} IAM security issues detected requiring attention.",
-        "risk_assessment": "HIGH" if len(iam_results) > 5 else "MEDIUM",
+        "summary": f"⚠️ {total_issues} IAM security issues detected requiring attention. Security Score: {security_score}/100",
+        "risk_assessment": risk_level,
         "detailed_analysis": "Multiple IAM policies contain overly permissive configurations that violate the principle of least privilege.",
         "recommendations": [
             "Review and restrict overly permissive IAM policies",
             "Implement specific resource-based permissions",
             "Remove wildcard (*) permissions where possible",
-            "Conduct regular IAM policy audits"
+            "Conduct regular IAM policy audits",
+            "Enable MFA for all users with console access",
+            "Rotate access keys regularly"
         ],
         "priority_actions": [
             "Immediately review policies with wildcard permissions",
             "Document business justification for broad permissions",
-            "Implement least privilege access controls"
+            "Implement least privilege access controls",
+            "Enable MFA for high-privilege users"
         ],
-        "compliance_status": "NON_COMPLIANT"
+        "compliance_status": "NON_COMPLIANT" if security_score < 50 else "PARTIALLY_COMPLIANT"
     }
 
 def analyze_security_issues(scan_results):

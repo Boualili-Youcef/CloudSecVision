@@ -149,26 +149,37 @@ def display_overview():
     
     for service, data in results.items():
         if isinstance(data, list):
-            # Format ancien (S3, IAM) - liste d'issues
+            # Old format (list of issues)
             total_issues += len(data)
             for issue in data:
-                severity = issue.get('Severity', '').upper()
+                severity = issue.get('Severity', 'UNKNOWN').upper()
                 if severity == 'CRITICAL':
                     critical_issues += 1
                 elif severity == 'HIGH':
                     high_issues += 1
         elif isinstance(data, dict):
-            # Format nouveau (EC2) - dictionnaire structuré
+            # New professional format (structured dict)
             if 'findings' in data:
+                # Professional format with findings
                 findings = data.get('findings', [])
                 total_issues += len(findings)
                 critical_issues += data.get('critical_issues', 0)
                 high_issues += data.get('high_issues', 0)
+            elif 'total_issues' in data:
+                # Has structured counts
+                total_issues += data.get('total_issues', 0)
+                critical_issues += data.get('critical_issues', 0)
+                high_issues += data.get('high_issues', 0)
             else:
-                # Fallback pour dictionnaire simple
+                # Fallback for other dict formats
                 total_issues += len(data)
-    
-    # Display metrics
+                for issue in data.values() if isinstance(data, dict) else []:
+                    if isinstance(issue, dict):
+                        severity = issue.get('severity', issue.get('Severity', 'UNKNOWN')).upper()
+                        if severity == 'CRITICAL':
+                            critical_issues += 1
+                        elif severity == 'HIGH':
+                            high_issues += 1    # Display metrics
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -188,22 +199,34 @@ def display_overview():
         security_score = 100
         score_color = "green"
     else:
-        # Utiliser le score EC2 s'il existe, sinon calculer
+        # Calculate weighted average of professional service scores
+        scores = []
+        weights = []
+        
+        # Collect professional scores
         if 'ec2' in results and isinstance(results['ec2'], dict) and 'security_score' in results['ec2']:
-            # Utiliser le score professionnel d'EC2 comme base
-            ec2_score = results['ec2']['security_score']
-            ec2_issues = len(results['ec2'].get('findings', []))
-            # Ajuster selon les autres services
-            other_issues = total_issues - ec2_issues
-            security_score = max(0, ec2_score - (other_issues * 5))
+            scores.append(results['ec2']['security_score'])
+            weights.append(results['ec2'].get('total_issues', 1))
+            
+        if 'iam' in results and isinstance(results['iam'], dict) and 'security_score' in results['iam']:
+            scores.append(results['iam']['security_score'])
+            weights.append(results['iam'].get('total_issues', 1))
+            
+        if 's3' in results and isinstance(results['s3'], dict) and 'security_score' in results['s3']:
+            scores.append(results['s3']['security_score'])
+            weights.append(results['s3'].get('total_issues', 1))
+        
+        if scores:
+            # Weighted average based on number of issues (more issues = more weight)
+            security_score = sum(score * weight for score, weight in zip(scores, weights)) / sum(weights)
         else:
-            # Calcul fallback pour format ancien
+            # Fallback calculation for legacy format
             if critical_issues > 0:
                 security_score = max(0, 100 - (critical_issues * 25 + high_issues * 10))
             else:
                 security_score = max(20, 100 - (high_issues * 15 + (total_issues - high_issues) * 5))
         
-        # Couleur selon le score
+        # Color based on score
         if security_score < 30:
             score_color = "red"
         elif security_score < 70:
@@ -244,19 +267,27 @@ def display_overview():
         service_data = []
         for service, data in results.items():
             if isinstance(data, list):
-                # Format ancien (S3, IAM)
+                # Old format (list of issues)
                 service_data.append({
                     'Service': service.upper(),
                     'Issues': len(data)
                 })
             elif isinstance(data, dict):
-                # Format nouveau (EC2)
+                # New professional format (structured dict)
                 if 'findings' in data:
+                    # Professional format with findings
                     service_data.append({
                         'Service': service.upper(),
                         'Issues': len(data.get('findings', []))
                     })
+                elif 'total_issues' in data:
+                    # Has structured counts
+                    service_data.append({
+                        'Service': service.upper(),
+                        'Issues': data.get('total_issues', 0)
+                    })
                 else:
+                    # Fallback for other dict formats
                     service_data.append({
                         'Service': service.upper(),
                         'Issues': len(data)
@@ -278,21 +309,27 @@ def display_overview():
     all_issues = []
     for service, data in results.items():
         if isinstance(data, list):
-            # Format ancien (S3, IAM)
+            # Old format (list of issues)
             for issue in data:
-                issue['Service'] = service.upper()
-                all_issues.append(issue)
+                issue_copy = issue.copy()
+                issue_copy['Service'] = service.upper()
+                # Normalize severity field
+                if 'Severity' not in issue_copy:
+                    issue_copy['Severity'] = issue_copy.get('severity', 'UNKNOWN')
+                all_issues.append(issue_copy)
         elif isinstance(data, dict):
-            # Format nouveau (EC2)
+            # New professional format (structured dict)
             if 'findings' in data:
                 for finding in data.get('findings', []):
-                    # Convertir le format EC2 vers le format unifié pour affichage
+                    # Convert professional format to unified display format
                     issue = {
                         'Service': service.upper(),
                         'Severity': finding.get('severity', 'UNKNOWN').upper(),
                         'Issue': finding.get('title', 'Unknown Issue'),
                         'Description': finding.get('description', ''),
-                        'Resource': finding.get('resource_id', 'Unknown')
+                        'Resource': finding.get('resource_id', 'Unknown'),
+                        'Recommendation': finding.get('recommendation', ''),
+                        'Compliance': finding.get('compliance_impact', '')
                     }
                     all_issues.append(issue)
     
@@ -363,22 +400,82 @@ def display_iam_page():
             st.success("✅ No IAM security issues detected!")
             st.info("Your IAM policies appear to follow security best practices.")
         else:
-            # Display metrics
-            total_policies = len(iam_results)
-            
-            col1_1, col1_2 = st.columns(2)
-            with col1_1:
-                st.metric("🚨 Overly Permissive Policies", total_policies)
-            with col1_2:
-                st.metric("⚠️ Risk Level", "HIGH" if total_policies > 5 else "MEDIUM")
-            
-            # Display detailed issues
-            st.subheader("🔍 Detailed Issues")
-            for i, issue in enumerate(iam_results, 1):
-                with st.expander(f"Policy #{i}: {issue.get('PolicyName', 'Unknown')}"):
-                    st.write(f"**Policy ARN:** `{issue.get('Arn', 'Unknown')}`")
-                    st.write(f"**Issue:** {issue.get('Issue', 'Unknown issue')}")
-                    st.warning("⚠️ This policy grants overly broad permissions and should be reviewed.")
+            # Handle both old format (list) and new format (dict)
+            if isinstance(iam_results, dict):
+                # New professional format
+                findings = iam_results.get('findings', [])
+                total_issues = iam_results.get('total_issues', 0)
+                security_score = iam_results.get('security_score', 0)
+                critical_issues = iam_results.get('critical_issues', 0)
+                high_issues = iam_results.get('high_issues', 0)
+                risk_level = iam_results.get('risk_level', 'UNKNOWN')
+                
+                # Display enhanced metrics
+                col1_1, col1_2, col1_3 = st.columns(3)
+                with col1_1:
+                    st.metric("🚨 Total Issues", total_issues)
+                with col1_2:
+                    st.metric("🔥 Critical + High", critical_issues + high_issues, 
+                             delta=None if (critical_issues + high_issues) == 0 else "High Priority")
+                with col1_3:
+                    st.metric("📊 Security Score", f"{security_score}/100", 
+                             delta=f"{'Good' if security_score >= 70 else 'Needs Improvement'}")
+                
+                # Risk level indicator
+                risk_color = {
+                    'CRITICAL': '🔴',
+                    'HIGH': '🟠',
+                    'MEDIUM': '🟡', 
+                    'LOW': '🟢'
+                }.get(risk_level, '⚪')
+                st.markdown(f"**Risk Level:** {risk_color} {risk_level}")
+                
+                # Display detailed findings
+                if findings:
+                    st.subheader("🔍 Security Findings")
+                    
+                    # Group findings by severity
+                    critical_findings = [f for f in findings if f.get('severity') == 'CRITICAL']
+                    high_findings = [f for f in findings if f.get('severity') == 'HIGH']
+                    medium_findings = [f for f in findings if f.get('severity') == 'MEDIUM']
+                    low_findings = [f for f in findings if f.get('severity') == 'LOW']
+                    
+                    # Display by severity
+                    for severity, findings_list, color in [
+                        ('CRITICAL', critical_findings, '🔴'),
+                        ('HIGH', high_findings, '🟠'),
+                        ('MEDIUM', medium_findings, '🟡'),
+                        ('LOW', low_findings, '🟢')
+                    ]:
+                        if findings_list:
+                            st.markdown(f"**{color} {severity} Issues ({len(findings_list)})**")
+                            for i, finding in enumerate(findings_list, 1):
+                                with st.expander(f"{finding.get('title', 'Unknown Issue')}"):
+                                    st.write(f"**Resource:** `{finding.get('resource_id', 'Unknown')}`")
+                                    st.write(f"**Category:** {finding.get('category', 'Unknown')}")
+                                    st.write(f"**Description:** {finding.get('description', 'No description')}")
+                                    if finding.get('recommendation'):
+                                        st.info(f"**Recommendation:** {finding.get('recommendation')}")
+                                    if finding.get('compliance_impact'):
+                                        st.warning(f"**Compliance Impact:** {finding.get('compliance_impact')}")
+                            st.markdown("---")
+            else:
+                # Old format (list) - fallback for backward compatibility
+                total_policies = len(iam_results)
+                
+                col1_1, col1_2 = st.columns(2)
+                with col1_1:
+                    st.metric("🚨 Overly Permissive Policies", total_policies)
+                with col1_2:
+                    st.metric("⚠️ Risk Level", "HIGH" if total_policies > 5 else "MEDIUM")
+                
+                # Display detailed issues
+                st.subheader("🔍 Detailed Issues")
+                for i, issue in enumerate(iam_results, 1):
+                    with st.expander(f"Policy #{i}: {issue.get('PolicyName', 'Unknown')}"):
+                        st.write(f"**Policy ARN:** `{issue.get('Arn', 'Unknown')}`")
+                        st.write(f"**Issue:** {issue.get('Issue', 'Unknown issue')}")
+                        st.warning("⚠️ This policy grants overly broad permissions and should be reviewed.")
     
     # AI Analysis Report
     if 'iam_ai_report' in st.session_state:
