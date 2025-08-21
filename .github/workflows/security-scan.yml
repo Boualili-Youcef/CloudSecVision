@@ -1,0 +1,64 @@
+name: 🛡️ CloudSecVision Security Pipeline
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    - cron: '0 6 * * 1'  # Lundi 6h00
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type de scan à exécuter'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - ec2
+        - iam
+        - s3
+
+jobs:
+  security-analysis:
+    name: 🔍 Analyse de Sécurité AWS
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: 📦 Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          
+      - name: ⚙️ Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          
+      - name: 🔍 Run Security Scans
+        run: |
+          echo "🚀 Début des scans de sécurité..."
+          python main.py --service all --ai
+          
+      - name: 📊 Generate Reports
+        run: |
+          echo "📋 Génération des rapports..."
+          ls -la scan/results/
+          
+      - name: 📤 Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ github.run_number }}
+          path: scan/results/
+          retention-days: 30
