@@ -1,3 +1,4 @@
+# .github/workflows/security-scan.yml
 name: 🛡️ CloudSecVision Security Pipeline
 
 on:
@@ -39,6 +40,11 @@ jobs:
         run: |
           pip install -r requirements.txt
           
+      - name: 📁 Create Results Directory
+        run: |
+          mkdir -p scan/results
+          echo "✅ Dossier scan/results créé"
+          
       - name: ⚙️ Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -49,7 +55,7 @@ jobs:
       - name: 🔍 Run Security Scans
         run: |
           echo "🚀 Début des scans de sécurité..."
-          python main.py --service all --ai
+          python main.py --service ${{ github.event.inputs.scan_type || 'all' }} --ai
           
       - name: 📊 Generate Reports
         run: |
